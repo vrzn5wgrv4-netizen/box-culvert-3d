@@ -38,6 +38,12 @@
   .spec .dot{width:11px;height:11px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);}
   .spec select{width:78px;margin:0;}
   .spec input[type=number]{width:72px;background:#262c35;color:#e8eaee;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:3px 6px;font-size:12px;}
+  .rowhdr{display:grid;grid-template-columns:46px 1fr 1fr;gap:6px;align-items:center;margin:2px 0 4px;font-size:10.5px;color:#8b94a2;text-align:center;}
+  .rowhdr .ih{display:flex;align-items:center;justify-content:center;gap:5px;}
+  .rowhdr .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .srow{display:grid;grid-template-columns:46px 1fr 1fr;gap:6px;align-items:center;margin:4px 0;}
+  .srow .lab{font-size:12px;color:#dfe4ea;}
+  .srow select{width:100%;margin:0;}
   .legend{display:flex;align-items:center;gap:8px;margin:4px 0;color:#c7cdd6;}
   .sw{width:22px;height:9px;border-radius:4px;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);}
   .dim{color:#9aa3b0;font-size:11px;margin-top:8px;border-top:1px solid rgba(255,255,255,.1);padding-top:8px;}
@@ -1172,25 +1178,22 @@
   </div>
 
   <div class="group">
-    <div class="ttl">鉄筋仕様（呼び径 D16〜D51）</div>
-    <div class="spec">
-      <span class="lab"><span class="dot" style="background:#7d8a99"></span>主鉄筋</span>
-      <select id="dMain"></select>
+    <div class="ttl">鉄筋径（呼び径 D16〜D51）　部材ごとに設定</div>
+    <div class="rowhdr">
+      <span></span>
+      <span class="ih"><span class="dot" style="background:#7d8a99"></span>内側</span>
+      <span class="ih"><span class="dot" style="background:#c79a3a"></span>外側</span>
     </div>
-    <div class="spec">
-      <span class="lab"><span class="dot" style="background:#c79a3a"></span>圧縮鉄筋</span>
-      <select id="dComp"></select>
-    </div>
-    <div class="spec">
-      <span class="lab"><span class="dot" style="background:#5b8fc7"></span>せん断筋</span>
-      <select id="dShear"></select>
-    </div>
+    <div class="srow"><span class="lab">頂版</span><select id="dTopIn"></select><select id="dTopOut"></select></div>
+    <div class="srow"><span class="lab">側壁</span><select id="dWallIn"></select><select id="dWallOut"></select></div>
+    <div class="srow"><span class="lab">底版</span><select id="dBotIn"></select><select id="dBotOut"></select></div>
+    <div class="srow"><span class="lab">せん断</span><select id="dShear" style="grid-column:2 / span 2"></select></div>
   </div>
 
   <div class="group">
     <div class="ttl">鉄筋レイヤー</div>
-    <label><input type="checkbox" id="cbMain" checked> 主鉄筋（内側）@125</label>
-    <label><input type="checkbox" id="cbComp" checked> 圧縮鉄筋（外周）@125</label>
+    <label><input type="checkbox" id="cbInner" checked> 内側鉄筋 @125</label>
+    <label><input type="checkbox" id="cbOuter" checked> 外側鉄筋 @125</label>
     <label><input type="checkbox" id="cbDist" checked> 配力筋 D13 @250</label>
     <label><input type="checkbox" id="cbHaunch" checked> ハンチ筋(斜め筋)</label>
     <label><input type="checkbox" id="cbShear" checked> せん断筋 @500</label>
@@ -1199,8 +1202,8 @@
 
   <div class="group">
     <div class="ttl">凡例</div>
-    <div class="legend"><span class="sw" style="background:#7d8a99"></span>主鉄筋（内側・引張）</div>
-    <div class="legend"><span class="sw" style="background:#c79a3a"></span>圧縮鉄筋（外周）</div>
+    <div class="legend"><span class="sw" style="background:#7d8a99"></span>内側鉄筋（内空側）</div>
+    <div class="legend"><span class="sw" style="background:#c79a3a"></span>外側鉄筋（土側）</div>
     <div class="legend"><span class="sw" style="background:#5b8fc7"></span>せん断筋（タイ筋）</div>
     <div class="legend"><span class="sw" style="background:#9aa6b2"></span>配力筋 D13</div>
     <div class="legend"><span class="sw" style="background:#b9b7ae"></span>コンクリート(24N/mm²)</div>
@@ -1247,10 +1250,14 @@ recalcDims();
 const DIA = {16:0.0080,19:0.0095,22:0.0110,25:0.0125,29:0.0145,
              32:0.0160,35:0.0175,38:0.0190,41:0.0205,51:0.0255};
 const DIA_LIST = [16,19,22,25,29,32,35,38,41,51];
-const dia = { main:22, comp:19, shear:16 };
-const rMain  = () => DIA[dia.main];
-const rComp  = () => DIA[dia.comp];
-const rShear = () => DIA[dia.shear];
+// 部材ごと（頂版/側壁/底版）× 内側/外側 の呼び径、＋せん断筋
+const dia = {
+  topIn:22, topOut:19,
+  wallIn:19, wallOut:19,
+  botIn:25, botOut:22,
+  shear:16
+};
+const R = d => DIA[d]; // 呼び径→半径(m)
 
 /* ============================================================
    シーン / レンダラ（スマホは軽量化）
@@ -1307,8 +1314,8 @@ const matConc = new THREE.MeshPhysicalMaterial({
 });
 const matConcSolid = new THREE.MeshPhysicalMaterial({ color:0xb9b7ae, roughness:0.92 });
 const matLevel = new THREE.MeshStandardMaterial({ color:0x8f8d86, roughness:0.95 });
-const matMain  = new THREE.MeshStandardMaterial({ color:0x7d8a99, roughness:0.45, metalness:0.85 });
-const matComp  = new THREE.MeshStandardMaterial({ color:0xc79a3a, roughness:0.5,  metalness:0.75 });
+const matInner = new THREE.MeshStandardMaterial({ color:0x7d8a99, roughness:0.45, metalness:0.85 }); // 内側鉄筋
+const matOuter = new THREE.MeshStandardMaterial({ color:0xc79a3a, roughness:0.5,  metalness:0.75 }); // 外側鉄筋
 const matDist  = new THREE.MeshStandardMaterial({ color:0x9aa6b2, roughness:0.5,  metalness:0.8 });
 const matShear = new THREE.MeshStandardMaterial({ color:0x5b8fc7, roughness:0.45, metalness:0.8 });
 const matSoil  = new THREE.MeshStandardMaterial({ color:0x4a423a, roughness:1 });
@@ -1317,12 +1324,12 @@ const matSoil  = new THREE.MeshStandardMaterial({ color:0x4a423a, roughness:1 })
    グループ
 ============================================================ */
 const gConc   = new THREE.Group();
-const gMain   = new THREE.Group();
-const gComp   = new THREE.Group();
+const gInner  = new THREE.Group(); // 内側鉄筋
+const gOuter  = new THREE.Group(); // 外側鉄筋
 const gDist   = new THREE.Group();
 const gHaunch = new THREE.Group();
 const gShear  = new THREE.Group();
-scene.add(gConc, gMain, gComp, gDist, gHaunch, gShear);
+scene.add(gConc, gInner, gOuter, gDist, gHaunch, gShear);
 
 function clearGroup(g){
   for (const c of g.children){ if (c.geometry) c.geometry.dispose(); }
@@ -1418,43 +1425,50 @@ function roundedLoopCurve(x0, y0, x1, y1, r) {
 
 /* ============================================================
    鉄筋を寸法・径から再構築
-   主鉄筋(内側)=gMain / 圧縮鉄筋(外周フープ)=gComp /
-   配力筋=gDist / ハンチ筋=gHaunch / せん断筋=gShear
+   内側鉄筋=gInner / 外側鉄筋=gOuter / 配力筋=gDist /
+   ハンチ筋=gHaunch / せん断筋=gShear
+   径は部材ごと（頂版/側壁/底版）× 内側/外側 に設定
 ============================================================ */
 function buildRebar() {
-  [gMain, gComp, gDist, gHaunch, gShear].forEach(clearGroup);
-  const rm = rMain(), rc = rComp(), rs = rShear();
+  [gInner, gOuter, gDist, gHaunch, gShear].forEach(clearGroup);
+
+  // 部材ごとの半径
+  const rTi=R(dia.topIn),  rTo=R(dia.topOut);
+  const rWi=R(dia.wallIn), rWo=R(dia.wallOut);
+  const rBi=R(dia.botIn),  rBo=R(dia.botOut);
+  const rs = R(dia.shear);
+  const rOmax = Math.max(rTo, rWo, rBo);
+
   const minThk = Math.min(dim.tTop, dim.tBot, dim.tWall);
-  const ci = Math.min(COVER * 0.7, minThk/2 - 0.03);
-  const cc = COVER + rc;
+  const ci = Math.min(COVER * 0.7, minThk/2 - 0.03); // 内面かぶり位置
+  // 外面かぶり線（部材ごと：外面〜外側鉄筋芯）
+  const ccT = COVER + rTo, ccB = COVER + rBo, ccW = COVER + rWo;
   const Rc = Math.min(0.15, HA * 0.6);
 
   const zsAll = [];
   for (let z = PITCH_MAIN/2; z < LEN; z += PITCH_MAIN) zsAll.push(z);
 
-  /* 圧縮鉄筋: 外周フープ */
-  const outerLoop = roundedLoopCurve(-W/2 + cc, cc, W/2 - cc, H - cc, Rc);
-  {
-    const tube = new THREE.TubeGeometry(outerLoop, 200, rc, 8, true);
-    const im = new THREE.InstancedMesh(tube, matComp, zsAll.length);
-    const m = new THREE.Matrix4();
-    zsAll.forEach((z,i)=>{ m.makeTranslation(0,0,z); im.setMatrixAt(i,m); });
-    im.castShadow = true;
-    gComp.add(im);
-  }
+  // 隅への定着のばし（部材厚に収める）
+  const ovH    = Math.max(0.05, Math.min(HA + 0.10, dim.tWall - ccW - 0.02)); // スラブ筋→壁
+  const ovVtop = Math.max(0.05, Math.min(HA + 0.17, dim.tTop  - ccT - 0.02)); // 壁筋→頂版
+  const ovVbot = Math.max(0.05, Math.min(HA + 0.17, dim.tBot  - ccB - 0.02)); // 壁筋→底版
 
-  /* 主鉄筋: 内空面側（4面）。隅への定着のばしは部材内に収める */
-  const ovH    = Math.max(0.05, Math.min(HA + 0.10, dim.tWall - cc - 0.02));
-  const ovVtop = Math.max(0.05, Math.min(HA + 0.17, dim.tTop  - cc - 0.02));
-  const ovVbot = Math.max(0.05, Math.min(HA + 0.17, dim.tBot  - cc - 0.02));
-  instanceBar([-ix - ovH, iy1 + ci], [ix + ovH, iy1 + ci], rm, zsAll, matMain, gMain);
-  instanceBar([-ix - ovH, iy0 - ci], [ix + ovH, iy0 - ci], rm, zsAll, matMain, gMain);
-  instanceBar([-ix - ci, iy0 - ovVbot], [-ix - ci, iy1 + ovVtop], rm, zsAll, matMain, gMain);
-  instanceBar([ ix + ci, iy0 - ovVbot], [ ix + ci, iy1 + ovVtop], rm, zsAll, matMain, gMain);
+  /* ---- 内側鉄筋（内空面側・部材ごとの径） ---- */
+  instanceBar([-ix - ovH, iy1 + ci], [ix + ovH, iy1 + ci], rTi, zsAll, matInner, gInner); // 頂版 内側
+  instanceBar([-ix - ovH, iy0 - ci], [ix + ovH, iy0 - ci], rBi, zsAll, matInner, gInner); // 底版 内側
+  instanceBar([-ix - ci, iy0 - ovVbot], [-ix - ci, iy1 + ovVtop], rWi, zsAll, matInner, gInner); // 左壁 内側
+  instanceBar([ ix + ci, iy0 - ovVbot], [ ix + ci, iy1 + ovVtop], rWi, zsAll, matInner, gInner); // 右壁 内側
 
-  /* ハンチ筋（4隅斜め45°） */
+  /* ---- 外側鉄筋（土側・部材ごとの径。隅で重なる直線バーで構成） ---- */
+  const yoT = H - ccT, yoB = ccB, xoW = W/2 - ccW;
+  instanceBar([-xoW, yoT], [xoW, yoT], rTo, zsAll, matOuter, gOuter); // 頂版 外側（上面）
+  instanceBar([-xoW, yoB], [xoW, yoB], rBo, zsAll, matOuter, gOuter); // 底版 外側（下面）
+  instanceBar([-xoW, yoB], [-xoW, yoT], rWo, zsAll, matOuter, gOuter); // 左壁 外側
+  instanceBar([ xoW, yoB], [ xoW, yoT], rWo, zsAll, matOuter, gOuter); // 右壁 外側
+
+  /* ---- ハンチ筋（4隅斜め45°・内側扱い） ---- */
   {
-    const e = Math.max(0.06, Math.min(HA + 0.17, minThk - cc - 0.02));
+    const e = Math.max(0.06, Math.min(HA + 0.17, minThk - Math.max(ccT,ccB,ccW) - 0.02));
     const o = ci / Math.SQRT2;
     const cfg = [
       { a:[-ix, iy1-HA], b:[-ix+HA, iy1], n:[ 1,-1] },
@@ -1466,18 +1480,19 @@ function buildRebar() {
       const dx=b[0]-a[0], dy=b[1]-a[1], dl=Math.hypot(dx,dy);
       const ux=dx/dl, uy=dy/dl, offX=-n[0]*o, offY=-n[1]*o;
       instanceBar([a[0]+offX-ux*e, a[1]+offY-uy*e], [b[0]+offX+ux*e, b[1]+offY+uy*e],
-                  rm, zsAll, matMain, gHaunch);
+                  rWi, zsAll, matInner, gHaunch);
     }
   }
 
-  /* 配力筋（軸方向 D13 @250） */
+  /* ---- 配力筋（軸方向 D13 @250） ---- */
   {
+    const ccd = COVER + rOmax;
     const longGeo = new THREE.CylinderGeometry(rD13, rD13, LEN, 8);
     longGeo.rotateX(Math.PI/2);
     longGeo.translate(0, 0, LEN/2);
     const pos = [];
     const loopIn = roundedLoopCurve(
-      -W/2 + cc + 0.014, cc + 0.014, W/2 - cc - 0.014, H - cc - 0.014, Math.max(0.05, Rc - 0.01));
+      -W/2 + ccd + 0.014, ccd + 0.014, W/2 - ccd - 0.014, H - ccd - 0.014, Math.max(0.05, Rc - 0.01));
     const nOuter = Math.max(8, Math.round(loopIn.getLength() / PITCH_DIST));
     loopIn.getSpacedPoints(nOuter).slice(0, nOuter).forEach(p => pos.push([p.x, p.y]));
     const d = ci + 0.014;
@@ -1499,7 +1514,7 @@ function buildRebar() {
     gDist.add(im);
   }
 
-  /* せん断筋（タイ筋, 両端135°フックを軸方向に, @500千鳥） */
+  /* ---- せん断筋（タイ筋, 両端135°フックを軸方向に, @500千鳥。内側⇔外側を連結） ---- */
   {
     const zext = Math.min(0.07, LEN*0.5 - 0.02);
     const k = 0.05;
@@ -1529,21 +1544,21 @@ function buildRebar() {
     const STEP = 0.5;
     const xMin = -ix + 0.15, xMax = ix - 0.15;
     { // 頂版（鉛直タイ）
-      const base = iy1 + ci, h = (H - cc) - base;
+      const base = iy1 + ci, h = (H - ccT) - base;
       const places = [];
       if (h > 0.05) zRows.forEach((z,r)=>{ const o=(r%2)*STEP/2;
         for (let x=xMin+o; x<=xMax+1e-6; x+=STEP) places.push([x, base, z]); });
       addTies(tieGeom(h, rs), places, 0);
     }
     { // 底版（鉛直タイ）
-      const base = cc, h = (iy0 - ci) - base;
+      const base = ccB, h = (iy0 - ci) - base;
       const places = [];
       if (h > 0.05) zRows.forEach((z,r)=>{ const o=(r%2)*STEP/2;
         for (let x=xMin+o; x<=xMax+1e-6; x+=STEP) places.push([x, base, z]); });
       addTies(tieGeom(h, rs), places, 0);
     }
     { // 側壁（水平タイ）
-      const xs = W/2 - cc, xi = ix + ci, h = xs - xi;
+      const xs = W/2 - ccW, xi = ix + ci, h = xs - xi;
       const yMin = iy0 + 0.30, yMax = iy1 - 0.30;
       const left = [], right = [];
       if (h > 0.05) zRows.forEach((z,r)=>{ const o=(r%2)*STEP/2;
@@ -1571,8 +1586,8 @@ function applyConcMode() {
 }
 $('concMode').addEventListener('change', applyConcMode);
 $('opacity').addEventListener('input', () => { matConc.opacity = (+$('opacity').value)/100; });
-$('cbMain').addEventListener('change', e => gMain.visible = e.target.checked);
-$('cbComp').addEventListener('change', e => gComp.visible = e.target.checked);
+$('cbInner').addEventListener('change', e => gInner.visible = e.target.checked);
+$('cbOuter').addEventListener('change', e => gOuter.visible = e.target.checked);
 $('cbDist').addEventListener('change', e => gDist.visible = e.target.checked);
 $('cbHaunch').addEventListener('change', e => gHaunch.visible = e.target.checked);
 $('cbShear').addEventListener('change', e => gShear.visible = e.target.checked);
@@ -1581,12 +1596,13 @@ $('cbRot').addEventListener('change', e => controls.autoRotate = e.target.checke
 function fillDia(sel, val) {
   sel.innerHTML = DIA_LIST.map(d => '<option value="'+d+'"'+(d===val?' selected':'')+'>D'+d+'</option>').join('');
 }
-fillDia($('dMain'),  dia.main);
-fillDia($('dComp'),  dia.comp);
-fillDia($('dShear'), dia.shear);
-$('dMain').addEventListener('change',  e => { dia.main  = +e.target.value; buildRebar(); updateReadout(); });
-$('dComp').addEventListener('change',  e => { dia.comp  = +e.target.value; buildRebar(); updateReadout(); });
-$('dShear').addEventListener('change', e => { dia.shear = +e.target.value; buildRebar(); updateReadout(); });
+// 部材×内外 のドロップダウン（select id → dia キー）
+const DIA_MAP = { dTopIn:'topIn', dTopOut:'topOut', dWallIn:'wallIn', dWallOut:'wallOut',
+                  dBotIn:'botIn', dBotOut:'botOut', dShear:'shear' };
+Object.entries(DIA_MAP).forEach(([id, key]) => {
+  fillDia($(id), dia[key]);
+  $(id).addEventListener('change', e => { dia[key] = +e.target.value; buildRebar(); updateReadout(); });
+});
 
 function readDims() {
   dim.iw    = Math.max(0.5, (+$('iw').value   || 4000) / 1000);
@@ -1600,8 +1616,9 @@ function updateReadout() {
   $('dimReadout').innerHTML =
     '外形 B'+((W*1000)|0)+'×H'+((H*1000)|0)+'mm<br>' +
     '内空 '+((dim.iw*1000)|0)+'×'+((dim.ih*1000)|0)+' / 奥行 '+((LEN*1000)|0)+'(固定)<br>' +
-    '頂版t='+((dim.tTop*1000)|0)+' / 底版t='+((dim.tBot*1000)|0)+' / 側壁t='+((dim.tWall*1000)|0)+'<br>' +
-    '主鉄筋D'+dia.main+' / 圧縮D'+dia.comp+' / せん断D'+dia.shear+' / かぶり'+Math.round(COVER*1000);
+    '頂版t='+((dim.tTop*1000)|0)+' / 底版t='+((dim.tBot*1000)|0)+' / 側壁t='+((dim.tWall*1000)|0)+' / かぶり'+Math.round(COVER*1000)+'<br>' +
+    '内側 頂D'+dia.topIn+'/側D'+dia.wallIn+'/底D'+dia.botIn+'<br>' +
+    '外側 頂D'+dia.topOut+'/側D'+dia.wallOut+'/底D'+dia.botOut+' / せん断D'+dia.shear;
 }
 function rebuildAll() {
   recalcDims();
